@@ -5,13 +5,13 @@
 pub mod SkillNet {
     use core::starknet::{
         ContractAddress, get_caller_address,
-        storage::{Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePathEntry},
+        storage::{Map, StorageMapReadAccess, StorageMapWriteAccess},
     };
     use contract::base::types::{
         CourseDetails, CertificationDetails, ResourceType, StudentCourseData,
     };
     use contract::interfaces::ISkillNet::ISkillNet;
-    use contract::interfaces::IErc20::{IERC20DispatcherTrait, IERC20Dispatcher};
+    use contract::interfaces::IErc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use contract::interfaces::IErc721::{IERC721Dispatcher, IERC721DispatcherTrait};
 
     /// @notice Contract storage structure
@@ -79,7 +79,7 @@ pub mod SkillNet {
     pub struct CourseCertificateMinted {
         pub student: ContractAddress,
         pub course_id: u256,
-        pub minted_nft_id: u256,
+        pub token_id: u256,
     }
 
     /// @notice Initializes the Events contract
@@ -120,7 +120,7 @@ pub mod SkillNet {
             // Confirm student has not enrolled before
             let student = get_caller_address();
             let mut student_course_data = self.course_enrolled_students.read((course_id, student));
-            assert(student_course_data.course_id != course_id, 'Student already enrolled');
+            assert(student_course_data.enrollment_id == 0, 'Student already enrolled');
 
             // Get instructor and token addresses
             let instructor = course.instructor;
@@ -148,18 +148,18 @@ pub mod SkillNet {
             self.emit(EnrolledForCourse { course_id, course_name, student_address: student });
         }
 
-        fn mint_course_certificate(ref self: ContractState, course_id: u256) {
+        fn mint_course_certificate(ref self: ContractState, course_id: u256) -> u256 {
             // Get student and course details
             let student = get_caller_address();
             let mut student_course_data = self
                 .course_enrolled_students
-                .read((certificate_id, student));
+                .read((course_id, student));
 
-            assert(student_course_data.course_id == course_id, 'Invalid course id');
+            // assert(student_course_data.course_id == course_id, 'Invalid course id');
             assert(student_course_data.enrolled, 'Student not enrolled');
 
             assert(student_course_data.completed, 'Student not qualified');
-            assert(student_course_data.minted_NFT == 0, 'Certificate_already_minted');
+            assert(student_course_data.token_id == 0, 'Certificate_already_minted');
 
             // Mint course NFT for qualified students
             let nft_address = self.nft_address.read();
@@ -171,6 +171,7 @@ pub mod SkillNet {
             self.course_enrolled_students.write((course_id, student), student_course_data);
 
             self.emit(CourseCertificateMinted { student, course_id, token_id });
+            token_id
         }
 
         fn verify_course_credential(
